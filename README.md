@@ -4,6 +4,15 @@ TypeScript DSL that compiles to Flowable 6.8 BPMN 2.0 XML.
 
 Define BPMN processes as TypeScript code, get validated XML out. No drag-and-drop editors, no XML by hand.
 
+### Order Approval
+![Order Approval — gateway with conditional routing, timer boundary, and call activity](docs/images/order-approval.png)
+
+### Loan Application
+![Loan Application — parallel fork/join, exclusive gateway, timer boundary with escalation](docs/images/loan-application.png)
+
+### Hiring Pipeline
+![Hiring Pipeline — embedded subprocess, error boundary, multi-stage interviews](docs/images/hiring-pipeline.png)
+
 ## Install
 
 ```bash
