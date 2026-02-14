@@ -13,8 +13,21 @@ export async function renderDiagram(xml: string): Promise<void> {
   const layoutedXml = layoutWithDagre(xml);
   await viewer.importXML(layoutedXml);
 
-  const canvas = viewer.get("canvas") as { zoom(action: string): void };
+  const canvas = viewer.get("canvas") as {
+    zoom(action: string): void;
+    viewbox(): { x: number; y: number; width: number; height: number; inner: { x: number; y: number; width: number; height: number } };
+    viewbox(box: { x: number; y: number; width: number; height: number }): void;
+  };
   canvas.zoom("fit-viewport");
+
+  // Center the diagram vertically within the viewport
+  const vb = canvas.viewbox();
+  const contentH = vb.inner.height;
+  const viewH = vb.height;
+  if (contentH < viewH) {
+    const offsetY = vb.inner.y - (viewH - contentH) / 2;
+    canvas.viewbox({ ...vb, y: offsetY });
+  }
 }
 
 // --- Element sizes ---

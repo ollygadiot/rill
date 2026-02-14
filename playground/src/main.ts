@@ -9,6 +9,7 @@ import { EXAMPLES, EXAMPLE_KEYS } from "./examples";
 
 const editorPanel = document.getElementById("editor-panel")!;
 const diagramPanel = document.getElementById("diagram-panel")!;
+const diagramContainer = document.getElementById("diagram-container")!;
 const errorPanel = document.getElementById("error-panel")!;
 const statusEl = document.getElementById("status")!;
 const exampleSelect = document.getElementById("example-select") as HTMLSelectElement;
@@ -81,7 +82,7 @@ divider.addEventListener("mousedown", (e) => {
 });
 
 // Initialize
-initRenderer(diagramPanel);
+initRenderer(diagramContainer);
 
 const debouncedUpdate = debounce(
   (code: string) => { update(code); },
