@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:flowable="http://flowable.org/bpmn" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" targetNamespace="http://flowable.org/test">
+  <process id="order-approval" name="order-approval" isExecutable="true">
+    <startEvent id="orderReceived" name="Order Received"/>
+    <serviceTask id="validateOrder" name="Validate Order" flowable:delegateExpression="${orderValidator}">
+      <extensionElements>
+        <flowable:field name="minAmount">
+          <flowable:string>50</flowable:string>
+        </flowable:field>
+        <flowable:field name="maxAmount">
+          <flowable:expression>config.maxOrderAmount</flowable:expression>
+        </flowable:field>
+      </extensionElements>
+    </serviceTask>
+    <exclusiveGateway id="checkAmount" name="Check Amount" default="manualPath"/>
+    <serviceTask id="autoApprove" name="Auto Approve" flowable:class="com.example.AutoApproveService"/>
+    <userTask id="manualReview" name="Manual Review" flowable:candidateGroups="managers" flowable:formKey="approval-form">
+      <extensionElements>
+        <flowable:formProperty id="approved" name="approved" type="boolean" required="true"/>
+        <flowable:formProperty id="comments" name="comments" type="string" required="false"/>
+      </extensionElements>
+    </userTask>
+    <boundaryEvent id="reminderTimer" attachedToRef="manualReview" cancelActivity="false">
+      <timerEventDefinition>
+        <timeCycle>R2/PT6H</timeCycle>
+      </timerEventDefinition>
+    </boundaryEvent>
+    <serviceTask id="sendReminder" name="Send Reminder" flowable:delegateExpression="${emailService}"/>
+    <endEvent id="done" name="Done"/>
+    <sequenceFlow id="flow_orderReceived_to_validateOrder_1" sourceRef="orderReceived" targetRef="validateOrder"/>
+    <sequenceFlow id="flow_validateOrder_to_checkAmount_2" sourceRef="validateOrder" targetRef="checkAmount"/>
+    <sequenceFlow id="flow_checkAmount_to_autoApprove_3" name="${amount &lt; 5000}" sourceRef="checkAmount" targetRef="autoApprove">
+      <conditionExpression xsi:type="tFormalExpression"><![CDATA[${amount < 5000}]]></conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="manualPath" sourceRef="checkAmount" targetRef="manualReview"/>
+    <sequenceFlow id="flow_autoApprove_to_done_4" sourceRef="autoApprove" targetRef="done"/>
+    <sequenceFlow id="flow_manualReview_to_done_5" sourceRef="manualReview" targetRef="done"/>
+    <sequenceFlow id="flow_reminderTimer_to_sendReminder_6" sourceRef="reminderTimer" targetRef="sendReminder"/>
+    <sequenceFlow id="flow_sendReminder_to_done_7" sourceRef="sendReminder" targetRef="done"/>
+  </process>
+</definitions>

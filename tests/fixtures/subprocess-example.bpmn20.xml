@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:flowable="http://flowable.org/bpmn" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC" xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI" targetNamespace="http://flowable.org/test">
+  <error id="ERR_REJECTED" errorCode="REJECTED"/>
+  <process id="subprocess-example" name="subprocess-example" isExecutable="true">
+    <startEvent id="start" name="Start"/>
+    <subProcess id="approvalSub" name="Approval Sub">
+      <startEvent id="subStart" name="Sub Start"/>
+      <userTask id="review" name="Review" flowable:assignee="${initiator}"/>
+      <endEvent id="subEnd" name="Sub End"/>
+      <sequenceFlow id="flow_subStart_to_review_1" sourceRef="subStart" targetRef="review"/>
+      <sequenceFlow id="flow_review_to_subEnd_2" sourceRef="review" targetRef="subEnd"/>
+    </subProcess>
+    <boundaryEvent id="onSubError" attachedToRef="approvalSub" cancelActivity="true">
+      <errorEventDefinition errorRef="ERR_REJECTED"/>
+    </boundaryEvent>
+    <serviceTask id="handleRejection" name="Handle Rejection" flowable:delegateExpression="${rejectionHandler}"/>
+    <endEvent id="end" name="End"/>
+    <sequenceFlow id="flow_start_to_approvalSub_1" sourceRef="start" targetRef="approvalSub"/>
+    <sequenceFlow id="flow_approvalSub_to_end_2" sourceRef="approvalSub" targetRef="end"/>
+    <sequenceFlow id="flow_onSubError_to_handleRejection_3" sourceRef="onSubError" targetRef="handleRejection"/>
+    <sequenceFlow id="flow_handleRejection_to_end_4" sourceRef="handleRejection" targetRef="end"/>
+  </process>
+</definitions>
