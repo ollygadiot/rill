@@ -2,6 +2,20 @@ import type BpmnViewer from "bpmn-js/lib/Viewer";
 
 type Viewer = InstanceType<typeof BpmnViewer>;
 
+interface ExtensionValue {
+  $type: string;
+  $body?: string;
+  $children?: ExtensionValue[];
+  name?: string;
+  source?: string;
+  sourceExpression?: string;
+  target?: string;
+  id?: string;
+  type?: string;
+  required?: string;
+  [key: string]: unknown;
+}
+
 interface BusinessObject {
   $type: string;
   id: string;
@@ -10,10 +24,8 @@ interface BusinessObject {
   attachedToRef?: { id: string; name?: string };
   scriptFormat?: string;
   calledElement?: string;
-  sourceRef?: { id: string; name?: string };
-  targetRef?: { id: string; name?: string };
-  conditionExpression?: { body: string };
   $attrs?: Record<string, string>;
+  extensionElements?: { values: ExtensionValue[] };
   eventDefinitions?: Array<{
     $type: string;
     timeDuration?: { body: string };
@@ -27,8 +39,6 @@ interface BpmnElement {
   id: string;
   type: string;
   businessObject: BusinessObject;
-  incoming?: Array<{ businessObject: BusinessObject }>;
-  outgoing?: Array<{ businessObject: BusinessObject }>;
   waypoints?: unknown;
 }
 
@@ -114,34 +124,54 @@ function buildTooltipHtml(element: BpmnElement): string {
     html += `</div>`;
   }
 
-  // Inputs (incoming flows)
-  if (element.incoming && element.incoming.length > 0) {
+  // Extension elements: fields, variable mappings, form properties
+  const extValues = bo.extensionElements?.values ?? [];
+
+  // Service task fields
+  const fields = extValues.filter((v) => v.$type === "flowable:field");
+  if (fields.length > 0) {
     html += `<div class="rill-tooltip-section">`;
-    html += `<div class="rill-tooltip-label">Inputs</div>`;
-    for (const conn of element.incoming) {
-      const flow = conn.businessObject;
-      const src = flow.sourceRef;
-      const srcName = src?.name ?? src?.id ?? "?";
-      const cond = flow.conditionExpression?.body;
-      html += `<div class="rill-tooltip-flow">\u2190 ${esc(srcName)}`;
-      if (cond) html += ` <span class="rill-tooltip-cond">${esc(cond)}</span>`;
-      html += `</div>`;
+    html += `<div class="rill-tooltip-label">Fields</div>`;
+    for (const f of fields) {
+      const child = f.$children?.[0];
+      const val = child?.$body ?? "";
+      const kind = child?.$type === "flowable:expression" ? "expr" : "str";
+      html += `<div class="rill-tooltip-flow">${esc(f.name ?? "?")} <span class="rill-tooltip-cond">${esc(val)}</span> <span class="rill-tooltip-kind">${kind}</span></div>`;
     }
     html += `</div>`;
   }
 
-  // Outputs (outgoing flows)
-  if (element.outgoing && element.outgoing.length > 0) {
+  // Call activity input mappings
+  const inMappings = extValues.filter((v) => v.$type === "flowable:in");
+  if (inMappings.length > 0) {
     html += `<div class="rill-tooltip-section">`;
-    html += `<div class="rill-tooltip-label">Outputs</div>`;
-    for (const conn of element.outgoing) {
-      const flow = conn.businessObject;
-      const tgt = flow.targetRef;
-      const tgtName = tgt?.name ?? tgt?.id ?? "?";
-      const cond = flow.conditionExpression?.body;
-      html += `<div class="rill-tooltip-flow">\u2192 ${esc(tgtName)}`;
-      if (cond) html += ` <span class="rill-tooltip-cond">${esc(cond)}</span>`;
-      html += `</div>`;
+    html += `<div class="rill-tooltip-label">In</div>`;
+    for (const m of inMappings) {
+      const src = m.sourceExpression ?? m.source ?? "?";
+      html += `<div class="rill-tooltip-flow">${esc(m.target ?? "?")} \u2190 <span class="rill-tooltip-cond">${esc(src)}</span></div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Call activity output mappings
+  const outMappings = extValues.filter((v) => v.$type === "flowable:out");
+  if (outMappings.length > 0) {
+    html += `<div class="rill-tooltip-section">`;
+    html += `<div class="rill-tooltip-label">Out</div>`;
+    for (const m of outMappings) {
+      html += `<div class="rill-tooltip-flow">${esc(m.target ?? "?")} \u2190 <span class="rill-tooltip-cond">${esc(m.source ?? "?")}</span></div>`;
+    }
+    html += `</div>`;
+  }
+
+  // User task form properties
+  const formProps = extValues.filter((v) => v.$type === "flowable:formProperty");
+  if (formProps.length > 0) {
+    html += `<div class="rill-tooltip-section">`;
+    html += `<div class="rill-tooltip-label">Form</div>`;
+    for (const f of formProps) {
+      const req = f.required === "true" ? "*" : "";
+      html += `<div class="rill-tooltip-flow">${esc(f.name ?? f.id ?? "?")} <span class="rill-tooltip-kind">${esc(f.type ?? "")}</span>${req ? ` <span class="rill-tooltip-required">${req}</span>` : ""}</div>`;
     }
     html += `</div>`;
   }
