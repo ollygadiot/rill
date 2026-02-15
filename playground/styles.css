@@ -124,3 +124,77 @@ html, body {
 #error-panel.hidden {
   display: none;
 }
+
+/* --- Tooltip & highlight --- */
+
+.rill-highlight .djs-outline {
+  stroke: #007acc !important;
+  stroke-width: 2px !important;
+  fill: rgba(0, 122, 204, 0.08) !important;
+  visibility: visible !important;
+}
+
+.rill-tooltip {
+  background: #2d2d2d;
+  color: #e0e0e0;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  pointer-events: none;
+  z-index: 20;
+  max-width: 320px;
+  white-space: nowrap;
+}
+
+.rill-tooltip-header {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #007acc;
+  margin-bottom: 2px;
+}
+
+.rill-tooltip-name {
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.rill-tooltip-props {
+  border-top: 1px solid #404040;
+  padding-top: 4px;
+  margin-bottom: 4px;
+}
+
+.rill-tooltip-prop {
+  font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+  font-size: 11px;
+  color: #4ec9b0;
+}
+
+.rill-tooltip-section {
+  border-top: 1px solid #404040;
+  padding-top: 4px;
+  margin-top: 4px;
+}
+
+.rill-tooltip-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #888;
+  margin-bottom: 2px;
+}
+
+.rill-tooltip-flow {
+  font-size: 11px;
+  color: #e0e0e0;
+}
+
+.rill-tooltip-cond {
+  font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+  font-size: 10px;
+  color: #dcdcaa;
+}

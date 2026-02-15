@@ -1,5 +1,6 @@
 import BpmnViewer from "bpmn-js/lib/Viewer";
 import dagre from "dagre";
+import { initTooltips } from "./tooltip";
 
 let viewer: InstanceType<typeof BpmnViewer> | null = null;
 
@@ -28,6 +29,8 @@ export async function renderDiagram(xml: string): Promise<void> {
     const offsetY = vb.inner.y - (viewH - contentH) / 2;
     canvas.viewbox({ ...vb, y: offsetY });
   }
+
+  initTooltips(viewer);
 }
 
 // --- Element sizes ---
