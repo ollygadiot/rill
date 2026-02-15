@@ -1,6 +1,9 @@
 import { expr, process, toBpmn } from "../src/index.js";
 
 const loanApplication = process("loan-application", (p) => {
+	const applicantId = p.var("applicantId", String);
+	const amount = p.var("amount", Number);
+
 	const start = p.start("applicationReceived");
 
 	// Enrich with credit score from external service
@@ -26,6 +29,8 @@ const loanApplication = process("loan-application", (p) => {
 			'execution.setVariable("approved", amount <= maxAuto)',
 			'execution.setVariable("interestRate", creditScore > 750 ? 3.5 : 5.2)',
 		].join("\n"),
+		in: [amount],
+		out: { approved: Boolean, interestRate: Number },
 	});
 
 	// Standard risk: manual underwriting
@@ -33,12 +38,15 @@ const loanApplication = process("loan-application", (p) => {
 		name: "Manual Underwriting",
 		candidateGroups: ["underwriters"],
 		formKey: "underwriting-form",
+		out: { approved: Boolean, interestRate: Number, conditions: String },
 		form: {
 			approved: { type: "boolean", required: true },
 			interestRate: { type: "double", required: true },
 			conditions: { type: "string" },
 		},
 	});
+
+	const { approved } = underwrite;
 
 	const escalationTimer = p.timer("escalationTimer", {
 		attachedTo: underwrite,
@@ -99,8 +107,8 @@ const loanApplication = process("loan-application", (p) => {
 	p.flow(autoApprove, decisionGateway);
 	p.flow(underwrite, decisionGateway);
 
-	// Decision outcome (JUEL conditions)
-	p.flow(decisionGateway, generateOffer, "${approved == true}");
+	// Decision outcome
+	p.flow(decisionGateway, generateOffer, approved);
 	p.flow(decisionGateway, reject, { id: "rejectedPath" });
 
 	// Approved: generate offer, send docs, done

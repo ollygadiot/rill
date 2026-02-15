@@ -9,6 +9,13 @@ declare module "rill" {
     readonly id: string;
   }
 
+  export type VarType = StringConstructor | BooleanConstructor | NumberConstructor | DateConstructor;
+
+  export interface Var {
+    readonly name: string;
+    readonly varType: VarType;
+  }
+
   export interface ProcessOptions {
     name?: string;
     isExecutable?: boolean;
@@ -20,6 +27,8 @@ declare module "rill" {
     class?: string;
     fields?: Record<string, string | Expression>;
     async?: boolean;
+    in?: Var[];
+    out?: Record<string, VarType>;
   }
 
   export interface ScriptOptions {
@@ -27,6 +36,8 @@ declare module "rill" {
     format?: string;
     script: string;
     autoStoreVariables?: boolean;
+    in?: Var[];
+    out?: Record<string, VarType>;
   }
 
   export interface UserOptions {
@@ -35,6 +46,8 @@ declare module "rill" {
     candidateGroups?: string[];
     formKey?: string;
     form?: Record<string, { type: string; required?: boolean }>;
+    in?: Var[];
+    out?: Record<string, VarType>;
   }
 
   export interface GatewayOptions {
@@ -91,10 +104,15 @@ declare module "rill" {
   }
 
   export class ProcessBuilder {
+    /** Declare a process-level input variable */
+    var(name: string, varType: VarType): Var;
     start(id: string, options?: { name?: string }): ElementRef;
     end(id: string): ElementRef;
+    service<O extends Record<string, VarType>>(id: string, options: ServiceOptions & { out: O }): ElementRef & { [K in keyof O]: Var };
     service(id: string, options: ServiceOptions): ElementRef;
+    script<O extends Record<string, VarType>>(id: string, options: ScriptOptions & { out: O }): ElementRef & { [K in keyof O]: Var };
     script(id: string, options: ScriptOptions): ElementRef;
+    user<O extends Record<string, VarType>>(id: string, options: UserOptions & { out: O }): ElementRef & { [K in keyof O]: Var };
     user(id: string, options: UserOptions): ElementRef;
     gateway(id: string, options?: GatewayOptions): ElementRef;
     parallel(id: string, options?: ParallelOptions): ElementRef;
@@ -106,10 +124,11 @@ declare module "rill" {
     error(id: string, errorCode: string): void;
     /** Chain elements linearly: pipe(a, b, c) creates flows a→b and b→c */
     pipe(...refs: ElementRef[]): void;
-    flow(source: ElementRef, target: ElementRef, condition?: string | FlowOptions): void;
+    flow(source: ElementRef, target: ElementRef, condition?: string | Var | FlowOptions): void;
   }
 
   export function expr(value: string): Expression;
+  export function isVar(value: unknown): value is Var;
   export function process(id: string, builderFn: (p: ProcessBuilder) => void, options?: ProcessOptions): ProcessDefinition;
   export function toBpmn(definition: ProcessDefinition): string;
 }

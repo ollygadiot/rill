@@ -1,4 +1,5 @@
 import type { Expression } from "../helpers.js";
+import type { Var, VarType } from "../var.js";
 
 export interface ElementRef {
 	readonly id: string;
@@ -18,6 +19,8 @@ export interface ServiceOptions {
 	class?: string;
 	fields?: Record<string, string | Expression>;
 	async?: boolean;
+	in?: Var[];
+	out?: Record<string, VarType>;
 }
 
 export interface ScriptOptions {
@@ -25,6 +28,8 @@ export interface ScriptOptions {
 	format?: string;
 	script: string;
 	autoStoreVariables?: boolean;
+	in?: Var[];
+	out?: Record<string, VarType>;
 }
 
 export interface UserOptions {
@@ -33,6 +38,8 @@ export interface UserOptions {
 	candidateGroups?: string[];
 	formKey?: string;
 	form?: Record<string, { type: string; required?: boolean }>;
+	in?: Var[];
+	out?: Record<string, VarType>;
 }
 
 export interface GatewayOptions {

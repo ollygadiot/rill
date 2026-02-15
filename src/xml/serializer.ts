@@ -13,6 +13,7 @@ import type {
 	SubProcess,
 	TimerDefinition,
 	UserTask,
+	VarDeclaration,
 	VariableMapping,
 } from "../types/elements.js";
 import { NS } from "./namespaces.js";
@@ -27,6 +28,7 @@ export function toBpmn(definition: ProcessDefinition): string {
 		"xmlns:xsi": NS.xsi,
 		"xmlns:xsd": NS.xsd,
 		"xmlns:flowable": NS.flowable,
+		"xmlns:rill": NS.rill,
 		"xmlns:bpmndi": NS.bpmndi,
 		"xmlns:omgdc": NS.omgdc,
 		"xmlns:omgdi": NS.omgdi,
@@ -44,6 +46,13 @@ export function toBpmn(definition: ProcessDefinition): string {
 		isExecutable: String(definition.isExecutable),
 	});
 
+	// Process-level variable declarations
+	if (definition.vars.length > 0) {
+		w.open("extensionElements");
+		writeVarDeclarations(w, definition.vars);
+		w.close("extensionElements");
+	}
+
 	writeElements(w, definition.elements);
 	writeFlows(w, definition.flows);
 
@@ -51,6 +60,16 @@ export function toBpmn(definition: ProcessDefinition): string {
 	w.close("definitions");
 
 	return w.toString();
+}
+
+function writeVarDeclarations(w: XmlWriter, vars: readonly VarDeclaration[]): void {
+	for (const v of vars) {
+		w.selfClose("rill:var", {
+			name: v.name,
+			type: v.varType,
+			direction: v.direction,
+		});
+	}
 }
 
 function writeElements(w: XmlWriter, elements: readonly AnyElement[]): void {
@@ -118,13 +137,19 @@ function writeServiceTask(w: XmlWriter, el: ServiceTask): void {
 		attrs["flowable:async"] = "true";
 	}
 
-	if (el.fields.length === 0) {
+	const hasFields = el.fields.length > 0;
+	const hasVars = el.vars && el.vars.length > 0;
+
+	if (!hasFields && !hasVars) {
 		w.selfClose("serviceTask", attrs);
 	} else {
 		w.open("serviceTask", attrs);
 		w.open("extensionElements");
 		for (const field of el.fields) {
 			writeField(w, field);
+		}
+		if (hasVars) {
+			writeVarDeclarations(w, el.vars!);
 		}
 		w.close("extensionElements");
 		w.close("serviceTask");
@@ -153,6 +178,11 @@ function writeScriptTask(w: XmlWriter, el: ScriptTask): void {
 		attrs["flowable:autoStoreVariables"] = "true";
 	}
 	w.open("scriptTask", attrs);
+	if (el.vars && el.vars.length > 0) {
+		w.open("extensionElements");
+		writeVarDeclarations(w, el.vars);
+		w.close("extensionElements");
+	}
 	w.cdata("script", el.script);
 	w.close("scriptTask");
 }
@@ -172,7 +202,10 @@ function writeUserTask(w: XmlWriter, el: UserTask): void {
 		attrs["flowable:formKey"] = el.formKey;
 	}
 
-	if (el.formProperties.length === 0) {
+	const hasFormProps = el.formProperties.length > 0;
+	const hasVars = el.vars && el.vars.length > 0;
+
+	if (!hasFormProps && !hasVars) {
 		w.selfClose("userTask", attrs);
 	} else {
 		w.open("userTask", attrs);
@@ -184,6 +217,9 @@ function writeUserTask(w: XmlWriter, el: UserTask): void {
 				type: prop.type,
 				required: String(prop.required),
 			});
+		}
+		if (hasVars) {
+			writeVarDeclarations(w, el.vars!);
 		}
 		w.close("extensionElements");
 		w.close("userTask");

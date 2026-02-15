@@ -5,15 +5,25 @@ export const EXAMPLES: Record<string, { label: string; code: string }> = {
     code: `import { expr, process, toBpmn } from "rill";
 
 const orderApproval = process("order-approval", (p) => {
+  // Typed process-level input variables
+  const orderId = p.var("orderId", String);
+  const amount = p.var("amount", Number);
+
   const start = p.start("orderReceived");
 
+  // Declare what each task reads (in) and produces (out)
   const validate = p.service("validateOrder", {
     delegate: "\${orderValidator}",
+    in: [orderId, amount],
+    out: { isValid: Boolean, reason: String },
     fields: {
       minAmount: "50",
       maxAmount: expr("config.maxOrderAmount"),
     },
   });
+
+  // Destructure output vars — use as typed flow conditions
+  const { isValid } = validate;
 
   const checkAmount = p.gateway("checkAmount", { default: "manualPath" });
 
@@ -24,6 +34,8 @@ const orderApproval = process("order-approval", (p) => {
   const review = p.user("manualReview", {
     candidateGroups: ["managers"],
     formKey: "approval-form",
+    in: [amount],
+    out: { approved: Boolean, comments: String },
     form: {
       approved: { type: "boolean", required: true },
       comments: { type: "string" },
@@ -55,8 +67,8 @@ const orderApproval = process("order-approval", (p) => {
   // Linear chains use pipe()
   p.pipe(start, validate, checkAmount);
 
-  // Conditional splits use flow()
-  p.flow(checkAmount, autoApprove, "\${amount < 5000}");
+  // Var as condition — isValid becomes \${isValid}
+  p.flow(checkAmount, autoApprove, isValid);
   p.flow(checkAmount, review, { id: "manualPath" });
 
   // Merge branches back, then call fulfillment

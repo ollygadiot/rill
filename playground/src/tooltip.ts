@@ -13,6 +13,7 @@ interface ExtensionValue {
   id?: string;
   type?: string;
   required?: string;
+  direction?: string;
   [key: string]: unknown;
 }
 
@@ -160,6 +161,29 @@ function buildTooltipHtml(element: BpmnElement): string {
     html += `<div class="rill-tooltip-label">Out</div>`;
     for (const m of outMappings) {
       html += `<div class="rill-tooltip-flow">${esc(m.target ?? "?")} \u2190 <span class="rill-tooltip-cond">${esc(m.source ?? "?")}</span></div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Rill variable declarations
+  const rillVars = extValues.filter((v) => v.$type === "rill:var");
+  const inVars = rillVars.filter((v) => v.direction === "in");
+  const outVars = rillVars.filter((v) => v.direction === "out");
+
+  if (inVars.length > 0) {
+    html += `<div class="rill-tooltip-section">`;
+    html += `<div class="rill-tooltip-label">Inputs</div>`;
+    for (const v of inVars) {
+      html += `<div class="rill-tooltip-flow">${esc(v.name ?? "?")} <span class="rill-tooltip-kind">${esc(v.type ?? "")}</span></div>`;
+    }
+    html += `</div>`;
+  }
+
+  if (outVars.length > 0) {
+    html += `<div class="rill-tooltip-section">`;
+    html += `<div class="rill-tooltip-label">Outputs</div>`;
+    for (const v of outVars) {
+      html += `<div class="rill-tooltip-flow">${esc(v.name ?? "?")} <span class="rill-tooltip-kind">${esc(v.type ?? "")}</span></div>`;
     }
     html += `</div>`;
   }

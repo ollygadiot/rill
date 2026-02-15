@@ -14,6 +14,7 @@ function buildDef(fn: (b: ProcessBuilder) => void): ProcessDefinition {
 		elements: b.getElements(),
 		flows: b.getFlows(),
 		errors: b.getErrors(),
+		vars: b.getVars(),
 	};
 }
 
@@ -288,5 +289,105 @@ describe("toBpmn", () => {
 		expect(xml).toContain('<subProcess id="sub" name="Sub">');
 		expect(xml).toContain('<startEvent id="ss" name="Ss"/>');
 		expect(xml).toContain("</subProcess>");
+	});
+
+	it("includes rill namespace in definitions", () => {
+		const xml = toBpmn(
+			buildDef((b) => {
+				b.start("s");
+				b.end("e");
+			}),
+		);
+		expect(xml).toContain('xmlns:rill="https://rill-bpmn.dev"');
+	});
+
+	it("serializes process-level vars as rill:var extension elements", () => {
+		const xml = toBpmn(
+			buildDef((b) => {
+				b.var("orderId", String);
+				b.var("amount", Number);
+				b.start("s");
+				b.end("e");
+			}),
+		);
+		expect(xml).toContain('<rill:var name="orderId" type="string" direction="in"/>');
+		expect(xml).toContain('<rill:var name="amount" type="double" direction="in"/>');
+		// Process-level vars should appear inside process > extensionElements
+		const processIdx = xml.indexOf("<process");
+		const varIdx = xml.indexOf("rill:var");
+		expect(varIdx).toBeGreaterThan(processIdx);
+	});
+
+	it("does not serialize process extensionElements when no vars", () => {
+		const xml = toBpmn(
+			buildDef((b) => {
+				b.start("s");
+				b.end("e");
+			}),
+		);
+		// No extensionElements directly inside process
+		const processContent = xml.slice(xml.indexOf("<process"), xml.indexOf("</process>"));
+		// The only extensionElements should be inside nested elements, not process-level
+		expect(processContent).not.toMatch(/<process[^>]*>[\s]*<extensionElements>/);
+	});
+
+	it("serializes element-level vars on service task", () => {
+		const xml = toBpmn(
+			buildDef((b) => {
+				const orderId = b.var("orderId", String);
+				b.start("s");
+				b.end("e");
+				b.service("validate", {
+					delegate: "${validator}",
+					in: [orderId],
+					out: { isValid: Boolean },
+				});
+			}),
+		);
+		expect(xml).toContain('<rill:var name="orderId" type="string" direction="in"/>');
+		expect(xml).toContain('<rill:var name="isValid" type="boolean" direction="out"/>');
+	});
+
+	it("serializes element-level vars on user task", () => {
+		const xml = toBpmn(
+			buildDef((b) => {
+				b.start("s");
+				b.end("e");
+				b.user("review", {
+					out: { approved: Boolean },
+				});
+			}),
+		);
+		expect(xml).toContain('<rill:var name="approved" type="boolean" direction="out"/>');
+	});
+
+	it("serializes element-level vars on script task", () => {
+		const xml = toBpmn(
+			buildDef((b) => {
+				b.start("s");
+				b.end("e");
+				b.script("calc", {
+					script: "x = 1",
+					out: { discount: Number },
+				});
+			}),
+		);
+		expect(xml).toContain('<rill:var name="discount" type="double" direction="out"/>');
+	});
+
+	it("serializes both fields and vars on service task", () => {
+		const xml = toBpmn(
+			buildDef((b) => {
+				b.start("s");
+				b.end("e");
+				b.service("svc", {
+					delegate: "${x}",
+					fields: { key: "val" },
+					out: { result: String },
+				});
+			}),
+		);
+		expect(xml).toContain('<flowable:field name="key">');
+		expect(xml).toContain('<rill:var name="result" type="string" direction="out"/>');
 	});
 });

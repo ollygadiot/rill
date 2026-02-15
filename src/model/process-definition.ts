@@ -1,4 +1,4 @@
-import type { AnyElement, ErrorDefinition, SequenceFlow } from "../types/elements.js";
+import type { AnyElement, ErrorDefinition, SequenceFlow, VarDeclaration } from "../types/elements.js";
 
 export interface ProcessDefinition {
 	readonly id: string;
@@ -7,4 +7,5 @@ export interface ProcessDefinition {
 	readonly elements: readonly AnyElement[];
 	readonly flows: readonly SequenceFlow[];
 	readonly errors: readonly ErrorDefinition[];
+	readonly vars: readonly VarDeclaration[];
 }

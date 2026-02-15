@@ -1,5 +1,7 @@
 export { expr, isExpression } from "./helpers.js";
 export type { Expression } from "./helpers.js";
+export { isVar } from "./var.js";
+export type { Var, VarType, FlowableVarType } from "./var.js";
 export type {
 	CallActivityOptions,
 	ElementRef,
@@ -12,7 +14,7 @@ export type {
 	TimerCatchOptions,
 	ErrorBoundaryOptions,
 } from "./types/options.js";
-export type { AnyElement, SequenceFlow, ErrorDefinition } from "./types/elements.js";
+export type { AnyElement, SequenceFlow, ErrorDefinition, VarDeclaration } from "./types/elements.js";
 export type { ProcessDefinition } from "./model/process-definition.js";
 export { ProcessBuilder, validate } from "./builder/process-builder.js";
 export { toBpmn } from "./xml/serializer.js";
@@ -33,7 +35,8 @@ export function process(
 
 	const elements = builder.getElements();
 	const flows = builder.getFlows();
-	const errors = validate(elements, flows);
+	const vars = builder.getVars();
+	const errors = validate(elements, flows, vars);
 
 	if (errors.length > 0) {
 		const messages = errors.map((e) => `  - ${e.message}`).join("\n");
@@ -47,5 +50,6 @@ export function process(
 		elements,
 		flows,
 		errors: builder.getErrors(),
+		vars: builder.getVars(),
 	};
 }

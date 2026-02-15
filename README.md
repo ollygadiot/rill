@@ -13,6 +13,18 @@ Define BPMN processes as TypeScript code, get validated XML out. No drag-and-dro
 ### Hiring Pipeline
 ![Hiring Pipeline — embedded subprocess, error boundary, multi-stage interviews](docs/images/hiring-pipeline.png)
 
+## Why Rill?
+
+- **Code over clicks** — no sidebars, no scrolling through property panels, no drag-and-drop. Define everything explicitly in TypeScript.
+- **Type safety** — catch errors at compile time, not at Flowable runtime. Variable references, element IDs, and flow wiring are all checked by TypeScript before any XML is generated.
+- **Explicit data flow** — declare what variables each task reads and produces (`in`/`out`). No hidden reliance on global process scope.
+- **Less error-prone** — no dangling edges, no flows connected to the wrong element, no accidentally deleted connections. If `flow(a, b)` compiles, `a` and `b` exist. The validator catches the rest.
+- **Auto-layout** — no manual positioning. The playground renders a clean diagram from the XML automatically. Move a task in code, the layout updates. No nudging boxes around a canvas.
+- **Reviewable** — TypeScript diffs are readable. BPMN XML diffs are not. Code review works naturally.
+- **Testable** — process definitions are plain data. Unit test your process logic without deploying to Flowable.
+- **Composable** — processes are TypeScript functions. Extract patterns, share utilities, build libraries of reusable process fragments.
+- **Version control friendly** — TypeScript is text. Branching, merging, blame, and history all work as expected.
+
 ## Install
 
 ```bash
@@ -32,11 +44,14 @@ const vacationRequest = process("vacation-request", (p) => {
   const approve = p.user("managerApproval", {
     candidateGroups: ["management"],
     formKey: "vacation-approval-form",
+    out: { approved: Boolean, reason: String },
     form: {
       approved: { type: "boolean", required: true },
       reason: { type: "string" },
     },
   });
+
+  const { approved } = approve;
 
   const decision = p.gateway("approvalDecision");
 
@@ -57,7 +72,7 @@ const vacationRequest = process("vacation-request", (p) => {
   const end = p.end("done");
 
   p.pipe(start, approve, decision);
-  p.flow(decision, notify, "${approved}");
+  p.flow(decision, notify, approved);
   p.flow(decision, reject, "${!approved}");
   p.pipe(notify, updateCalendar, end);
   p.flow(reject, end);
@@ -197,6 +212,43 @@ const sub = p.subprocess("retryBlock", (s) => {
 #### `p.error(id, errorCode)`
 
 Declares an error definition at the process level (used with `errorBoundary`).
+
+### Typed variables
+
+Declare what variables your process expects and what each task reads and produces.
+
+#### `p.var(name, varType)`
+
+Declares a process-level input variable. Returns a `Var` handle. Uses TypeScript constructors as type markers.
+
+```typescript
+const orderId = p.var("orderId", String);
+const amount = p.var("amount", Number);
+const active = p.var("active", Boolean);
+const created = p.var("created", Date);
+```
+
+#### `in` / `out` on tasks
+
+Service, user, and script tasks accept `in` (variables the task reads) and `out` (variables the task produces). When `out` is provided, the returned ref carries the output vars as properties you can destructure:
+
+```typescript
+const validate = p.service("validateOrder", {
+  delegate: "${orderValidator}",
+  in: [orderId, amount],
+  out: { isValid: Boolean, errors: String },
+});
+
+const { isValid, errors } = validate;
+```
+
+#### `Var` as flow condition
+
+Pass a `Var` directly to `flow()` as the condition — it converts to `${varName}`:
+
+```typescript
+p.flow(gateway, autoApprove, isValid);  // → condition="${isValid}"
+```
 
 ### Wiring flows
 

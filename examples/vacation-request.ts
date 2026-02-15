@@ -6,11 +6,14 @@ const vacationRequest = process("vacation-request", (p) => {
 	const approve = p.user("managerApproval", {
 		candidateGroups: ["management"],
 		formKey: "vacation-approval-form",
+		out: { approved: Boolean, reason: String },
 		form: {
 			approved: { type: "boolean", required: true },
 			reason: { type: "string" },
 		},
 	});
+
+	const { approved } = approve;
 
 	const decision = p.gateway("approvalDecision");
 
@@ -30,12 +33,10 @@ const vacationRequest = process("vacation-request", (p) => {
 
 	const end = p.end("done");
 
-	p.flow(start, approve);
-	p.flow(approve, decision);
-	p.flow(decision, notify, "${approved}");
+	p.pipe(start, approve, decision);
+	p.flow(decision, notify, approved);
 	p.flow(decision, reject, "${!approved}");
-	p.flow(notify, updateCalendar);
-	p.flow(updateCalendar, end);
+	p.pipe(notify, updateCalendar, end);
 	p.flow(reject, end);
 });
 

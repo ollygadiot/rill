@@ -17,6 +17,7 @@ import type {
 	SubProcess,
 	TimerDefinition,
 	UserTask,
+	VarDeclaration,
 	VariableMapping,
 } from "../types/elements.js";
 import type {
@@ -35,6 +36,7 @@ import type {
 	TimerCatchOptions,
 	UserOptions,
 } from "../types/options.js";
+import { type Var, type VarType, createVar, isVar, resolveVarType } from "../var.js";
 import { ElementRegistry } from "./element-registry.js";
 
 export class ProcessBuilder {
@@ -42,10 +44,16 @@ export class ProcessBuilder {
 	private elements: AnyElement[] = [];
 	private flows: SequenceFlow[] = [];
 	private errors: ErrorDefinition[] = [];
+	private processVars: VarDeclaration[] = [];
 	private flowCounter = 0;
 
 	constructor(registry?: ElementRegistry) {
 		this.registry = registry ?? new ElementRegistry();
+	}
+
+	var(name: string, varType: VarType): Var {
+		this.processVars.push({ name, varType: resolveVarType(varType), direction: "in" });
+		return createVar(name, varType);
 	}
 
 	start(id: string, options?: StartOptions): ElementRef {
@@ -70,8 +78,14 @@ export class ProcessBuilder {
 		return { id };
 	}
 
+	service<O extends Record<string, VarType>>(
+		id: string,
+		options: ServiceOptions & { out: O },
+	): ElementRef & { [K in keyof O]: Var };
+	service(id: string, options: ServiceOptions): ElementRef;
 	service(id: string, options: ServiceOptions): ElementRef {
 		const fields = buildFields(options.fields);
+		const vars = buildVarDeclarations(options.in, options.out);
 		const el: ServiceTask = {
 			id,
 			type: "serviceTask",
@@ -80,13 +94,20 @@ export class ProcessBuilder {
 			className: options.class,
 			fields,
 			async: options.async,
+			vars: vars.length > 0 ? vars : undefined,
 		};
 		this.registry.register(id);
 		this.elements.push(el);
-		return { id };
+		return enrichRef({ id }, options.out);
 	}
 
+	script<O extends Record<string, VarType>>(
+		id: string,
+		options: ScriptOptions & { out: O },
+	): ElementRef & { [K in keyof O]: Var };
+	script(id: string, options: ScriptOptions): ElementRef;
 	script(id: string, options: ScriptOptions): ElementRef {
+		const vars = buildVarDeclarations(options.in, options.out);
 		const el: ScriptTask = {
 			id,
 			type: "scriptTask",
@@ -94,14 +115,21 @@ export class ProcessBuilder {
 			scriptFormat: options.format ?? "groovy",
 			script: options.script,
 			autoStoreVariables: options.autoStoreVariables,
+			vars: vars.length > 0 ? vars : undefined,
 		};
 		this.registry.register(id);
 		this.elements.push(el);
-		return { id };
+		return enrichRef({ id }, options.out);
 	}
 
+	user<O extends Record<string, VarType>>(
+		id: string,
+		options: UserOptions & { out: O },
+	): ElementRef & { [K in keyof O]: Var };
+	user(id: string, options: UserOptions): ElementRef;
 	user(id: string, options: UserOptions): ElementRef {
 		const formProperties = buildFormProperties(options.form);
+		const vars = buildVarDeclarations(options.in, options.out);
 		const el: UserTask = {
 			id,
 			type: "userTask",
@@ -110,10 +138,11 @@ export class ProcessBuilder {
 			candidateGroups: options.candidateGroups,
 			formKey: options.formKey,
 			formProperties,
+			vars: vars.length > 0 ? vars : undefined,
 		};
 		this.registry.register(id);
 		this.elements.push(el);
-		return { id };
+		return enrichRef({ id }, options.out);
 	}
 
 	gateway(id: string, options?: GatewayOptions): ElementRef {
@@ -223,12 +252,16 @@ export class ProcessBuilder {
 		}
 	}
 
-	flow(source: ElementRef, target: ElementRef, condition?: string | FlowOptions): void {
+	flow(source: ElementRef, target: ElementRef, condition?: string | Var | FlowOptions): void {
 		let flowId: string;
 		let flowName: string | undefined;
 		let flowCondition: string | undefined;
 
-		if (typeof condition === "string") {
+		if (isVar(condition)) {
+			flowId = this.nextFlowId(source.id, target.id);
+			flowCondition = `\${${condition.name}}`;
+			flowName = `\${${condition.name}}`;
+		} else if (typeof condition === "string") {
 			flowId = this.nextFlowId(source.id, target.id);
 			flowCondition = condition;
 			flowName = condition;
@@ -259,6 +292,10 @@ export class ProcessBuilder {
 
 	getErrors(): readonly ErrorDefinition[] {
 		return this.errors;
+	}
+
+	getVars(): readonly VarDeclaration[] {
+		return this.processVars;
 	}
 
 	getRegistry(): ElementRegistry {
@@ -322,6 +359,33 @@ function buildOutputMappings(mappings?: Record<string, string>): readonly Variab
 	}));
 }
 
+function buildVarDeclarations(
+	inputs?: Var[],
+	outputs?: Record<string, VarType>,
+): readonly VarDeclaration[] {
+	const declarations: VarDeclaration[] = [];
+	if (inputs) {
+		for (const v of inputs) {
+			declarations.push({ name: v.name, varType: resolveVarType(v.varType), direction: "in" });
+		}
+	}
+	if (outputs) {
+		for (const [name, varType] of Object.entries(outputs)) {
+			declarations.push({ name, varType: resolveVarType(varType), direction: "out" });
+		}
+	}
+	return declarations;
+}
+
+function enrichRef(ref: ElementRef, out?: Record<string, VarType>): ElementRef {
+	if (!out) return ref;
+	const varHandles: Record<string, Var> = {};
+	for (const [name, varType] of Object.entries(out)) {
+		varHandles[name] = createVar(name, varType);
+	}
+	return Object.assign(ref, varHandles);
+}
+
 function extractTimerDefinition(options: {
 	duration?: string;
 	date?: string;
@@ -340,6 +404,7 @@ export interface ValidationError {
 export function validate(
 	elements: readonly AnyElement[],
 	flows: readonly SequenceFlow[],
+	processVars: readonly VarDeclaration[] = [],
 ): ValidationError[] {
 	const errors: ValidationError[] = [];
 	const elementIds = new Set(elements.map((e) => e.id));
@@ -384,6 +449,32 @@ export function validate(
 				errors.push({
 					message: `Boundary event "${el.id}" attached to unknown element "${el.attachedToRef}"`,
 				});
+			}
+		}
+	}
+
+	// Variable availability: every in-var must be supplied by p.var() or some task's out
+	const available = new Set<string>();
+	for (const v of processVars) {
+		available.add(v.name);
+	}
+	for (const el of elements) {
+		if ("vars" in el && el.vars) {
+			for (const v of el.vars) {
+				if (v.direction === "out") {
+					available.add(v.name);
+				}
+			}
+		}
+	}
+	for (const el of elements) {
+		if ("vars" in el && el.vars) {
+			for (const v of el.vars) {
+				if (v.direction === "in" && !available.has(v.name)) {
+					errors.push({
+						message: `Task "${el.id}" requires variable "${v.name}" but nothing in the process provides it`,
+					});
+				}
 			}
 		}
 	}

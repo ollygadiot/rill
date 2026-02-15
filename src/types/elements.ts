@@ -1,4 +1,5 @@
 import type { Expression } from "../helpers.js";
+import type { FlowableVarType } from "../var.js";
 
 export type ElementType =
 	| "startEvent"
@@ -25,6 +26,12 @@ export interface FormProperty {
 	name: string;
 	type: string;
 	required: boolean;
+}
+
+export interface VarDeclaration {
+	readonly name: string;
+	readonly varType: FlowableVarType;
+	readonly direction: "in" | "out";
 }
 
 export interface TimerDefinition {
@@ -54,6 +61,7 @@ export interface ServiceTask extends BpmnElement {
 	readonly className?: string;
 	readonly fields: readonly FieldDefinition[];
 	readonly async?: boolean;
+	readonly vars?: readonly VarDeclaration[];
 }
 
 export interface ScriptTask extends BpmnElement {
@@ -62,6 +70,7 @@ export interface ScriptTask extends BpmnElement {
 	readonly scriptFormat: string;
 	readonly script: string;
 	readonly autoStoreVariables?: boolean;
+	readonly vars?: readonly VarDeclaration[];
 }
 
 export interface UserTask extends BpmnElement {
@@ -71,6 +80,7 @@ export interface UserTask extends BpmnElement {
 	readonly candidateGroups?: readonly string[];
 	readonly formKey?: string;
 	readonly formProperties: readonly FormProperty[];
+	readonly vars?: readonly VarDeclaration[];
 }
 
 export interface ExclusiveGateway extends BpmnElement {

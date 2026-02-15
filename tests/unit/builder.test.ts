@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ProcessBuilder, validate } from "../../src/builder/process-builder.js";
 import { expr } from "../../src/helpers.js";
 import { process } from "../../src/index.js";
+import { isVar } from "../../src/var.js";
 
 describe("ProcessBuilder", () => {
 	it("creates a start event", () => {
@@ -318,6 +319,45 @@ describe("validate", () => {
 		const errors = validate(b.getElements(), b.getFlows());
 		expect(errors.some((e) => e.message.includes("default flow"))).toBe(true);
 	});
+
+	it("fails when a task requires a variable that nothing provides", () => {
+		const b = new ProcessBuilder();
+		b.start("s");
+		b.end("e");
+		b.service("svc", {
+			delegate: "${x}",
+			in: [{ name: "missing", varType: String } as unknown as import("../../src/var.js").Var],
+		});
+		const errors = validate(b.getElements(), b.getFlows(), b.getVars());
+		expect(errors.some((e) => e.message.includes('requires variable "missing"'))).toBe(true);
+	});
+
+	it("passes when in-var is provided by p.var()", () => {
+		const b = new ProcessBuilder();
+		const orderId = b.var("orderId", String);
+		b.start("s");
+		b.end("e");
+		b.service("svc", { delegate: "${x}", in: [orderId] });
+		const errors = validate(b.getElements(), b.getFlows(), b.getVars());
+		expect(errors).toEqual([]);
+	});
+
+	it("passes when in-var is provided by another task's out", () => {
+		const b = new ProcessBuilder();
+		b.start("s");
+		b.end("e");
+		const svc1 = b.service("producer", {
+			delegate: "${x}",
+			out: { result: String },
+		});
+		const resultVar = (svc1 as Record<string, unknown>).result as import("../../src/var.js").Var;
+		b.service("consumer", {
+			delegate: "${y}",
+			in: [resultVar],
+		});
+		const errors = validate(b.getElements(), b.getFlows(), b.getVars());
+		expect(errors).toEqual([]);
+	});
 });
 
 describe("process() top-level function", () => {
@@ -341,6 +381,34 @@ describe("process() top-level function", () => {
 		}).toThrow("validation failed");
 	});
 
+	it("throws when a task requires a variable that nothing provides", () => {
+		expect(() => {
+			process("missing-var", (p) => {
+				const s = p.start("s");
+				const e = p.end("e");
+				const amount = p.var("amount", Number);
+				// orderId is NOT declared — should fail
+				const svc = p.service("svc", {
+					delegate: "${x}",
+					in: [amount],
+					out: { orderId: String },
+				});
+				const { orderId } = svc;
+				const svc2 = p.service("svc2", {
+					delegate: "${y}",
+					in: [orderId, amount],
+				});
+				// But add a third service that needs "missing" which nobody provides
+				const missing = { name: "missing", varType: String } as unknown as import("../../src/var.js").Var;
+				p.service("svc3", {
+					delegate: "${z}",
+					in: [missing],
+				});
+				p.pipe(s, svc, svc2, e);
+			});
+		}).toThrow('requires variable "missing"');
+	});
+
 	it("accepts process options", () => {
 		const def = process(
 			"named",
@@ -353,5 +421,133 @@ describe("process() top-level function", () => {
 		);
 		expect(def.name).toBe("My Process");
 		expect(def.isExecutable).toBe(false);
+	});
+
+	it("passes process-level vars through to ProcessDefinition", () => {
+		const def = process("withVars", (p) => {
+			p.var("orderId", String);
+			p.var("amount", Number);
+			const s = p.start("s");
+			const e = p.end("e");
+			p.flow(s, e);
+		});
+		expect(def.vars).toHaveLength(2);
+		expect(def.vars[0]).toEqual({ name: "orderId", varType: "string", direction: "in" });
+		expect(def.vars[1]).toEqual({ name: "amount", varType: "double", direction: "in" });
+	});
+});
+
+describe("typed variables", () => {
+	it("p.var() creates a Var handle and stores a process-level declaration", () => {
+		const b = new ProcessBuilder();
+		const orderId = b.var("orderId", String);
+		expect(isVar(orderId)).toBe(true);
+		expect(orderId.name).toBe("orderId");
+		expect(orderId.varType).toBe(String);
+		expect(b.getVars()).toHaveLength(1);
+		expect(b.getVars()[0]).toEqual({ name: "orderId", varType: "string", direction: "in" });
+	});
+
+	it("service with in/out stores VarDeclarations on the element", () => {
+		const b = new ProcessBuilder();
+		const orderId = b.var("orderId", String);
+		b.service("validate", {
+			delegate: "${validator}",
+			in: [orderId],
+			out: { isValid: Boolean, errors: String },
+		});
+		const el = b.getElements()[0];
+		if (el.type === "serviceTask") {
+			expect(el.vars).toHaveLength(3);
+			expect(el.vars![0]).toEqual({ name: "orderId", varType: "string", direction: "in" });
+			expect(el.vars![1]).toEqual({ name: "isValid", varType: "boolean", direction: "out" });
+			expect(el.vars![2]).toEqual({ name: "errors", varType: "string", direction: "out" });
+		}
+	});
+
+	it("service with out returns enriched ElementRef with Var properties", () => {
+		const b = new ProcessBuilder();
+		const result = b.service("validate", {
+			delegate: "${validator}",
+			out: { isValid: Boolean, errors: String },
+		});
+		expect(result.id).toBe("validate");
+		expect(isVar((result as Record<string, unknown>).isValid)).toBe(true);
+		expect(isVar((result as Record<string, unknown>).errors)).toBe(true);
+		const isValidVar = (result as Record<string, unknown>).isValid as { name: string; varType: unknown };
+		expect(isValidVar.name).toBe("isValid");
+		expect(isValidVar.varType).toBe(Boolean);
+	});
+
+	it("service without out returns plain ElementRef", () => {
+		const b = new ProcessBuilder();
+		const result = b.service("svc", { delegate: "${x}" });
+		expect(result.id).toBe("svc");
+		expect(Object.keys(result)).toEqual(["id"]);
+	});
+
+	it("user with out returns enriched ElementRef", () => {
+		const b = new ProcessBuilder();
+		const result = b.user("review", {
+			out: { approved: Boolean },
+		});
+		expect(result.id).toBe("review");
+		expect(isVar((result as Record<string, unknown>).approved)).toBe(true);
+	});
+
+	it("script with out returns enriched ElementRef", () => {
+		const b = new ProcessBuilder();
+		const result = b.script("calc", {
+			script: "x = 1",
+			out: { discount: Number },
+		});
+		expect(result.id).toBe("calc");
+		expect(isVar((result as Record<string, unknown>).discount)).toBe(true);
+	});
+
+	it("flow() accepts a Var as condition and converts to ${name}", () => {
+		const b = new ProcessBuilder();
+		const s = b.start("s");
+		const e = b.end("e");
+		const result = b.service("validate", {
+			delegate: "${v}",
+			out: { isValid: Boolean },
+		});
+		const isValid = (result as Record<string, unknown>).isValid as import("../../src/var.js").Var;
+		b.flow(s, e, isValid);
+		const flow = b.getFlows()[0];
+		expect(flow.condition).toBe("${isValid}");
+		expect(flow.name).toBe("${isValid}");
+	});
+
+	it("pipe works with enriched ElementRef", () => {
+		const b = new ProcessBuilder();
+		const s = b.start("s");
+		const svc = b.service("svc", {
+			delegate: "${x}",
+			out: { result: String },
+		});
+		const e = b.end("e");
+		b.pipe(s, svc, e);
+		expect(b.getFlows()).toHaveLength(2);
+	});
+
+	it("backward compatibility: existing examples work without in/out", () => {
+		const b = new ProcessBuilder();
+		const s = b.start("s");
+		const svc = b.service("svc", { delegate: "${x}" });
+		const script = b.script("calc", { script: "x = 1" });
+		const user = b.user("review", { assignee: "admin" });
+		const e = b.end("e");
+		b.pipe(s, svc, script, user, e);
+
+		const els = b.getElements();
+		expect(els).toHaveLength(5);
+		// No vars on elements without in/out
+		for (const el of els) {
+			if ("vars" in el) {
+				expect(el.vars).toBeUndefined();
+			}
+		}
 	});
 });
